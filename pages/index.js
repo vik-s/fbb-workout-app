@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Download, Loader } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import workoutData from '../workouts.json';
 
 // Custom markdown components for beautiful styling
@@ -12,14 +13,15 @@ const markdownComponents = {
   strong: ({ node, ...props }) => <strong className="font-bold text-gray-900" {...props} />,
   em: ({ node, ...props }) => <em className="italic text-gray-600" {...props} />,
   table: ({ node, ...props }) => (
-    <div className="overflow-x-auto my-4">
-      <table className="w-full border-collapse border border-gray-300" {...props} />
+    <div className="overflow-x-auto my-6 rounded-lg shadow-md">
+      <table className="w-full border-collapse bg-white" {...props} />
     </div>
   ),
-  thead: ({ node, ...props }) => <thead className="bg-indigo-100" {...props} />,
-  th: ({ node, ...props }) => <th className="border border-gray-300 px-4 py-2 text-left font-bold text-gray-800 bg-indigo-50" {...props} />,
-  td: ({ node, ...props }) => <td className="border border-gray-300 px-4 py-2 text-gray-700" {...props} />,
-  tr: ({ node, ...props }) => <tr className="hover:bg-gray-50" {...props} />,
+  thead: ({ node, ...props }) => <thead className="bg-gradient-to-r from-indigo-600 to-indigo-700" {...props} />,
+  tbody: ({ node, ...props }) => <tbody className="divide-y divide-gray-200" {...props} />,
+  th: ({ node, ...props }) => <th className="px-6 py-4 text-left text-sm font-bold text-white uppercase tracking-wider" {...props} />,
+  td: ({ node, ...props }) => <td className="px-6 py-4 text-sm text-gray-700 whitespace-nowrap" {...props} />,
+  tr: ({ node, ...props }) => <tr className="hover:bg-indigo-50 transition-colors duration-150" {...props} />,
   ul: ({ node, ...props }) => <ul className="list-disc list-inside mb-3 space-y-1 ml-4" {...props} />,
   ol: ({ node, ...props }) => <ol className="list-decimal list-inside mb-3 space-y-1 ml-4" {...props} />,
   li: ({ node, ...props }) => <li className="text-gray-700" {...props} />,
@@ -357,7 +359,10 @@ export default function Home() {
             </div>
             
             <div className="prose prose-sm max-w-none">
-              <ReactMarkdown components={markdownComponents}>
+              <ReactMarkdown
+                components={markdownComponents}
+                remarkPlugins={[remarkGfm]}
+              >
                 {formatWorkoutAsMarkdown(workout.content)}
               </ReactMarkdown>
             </div>
