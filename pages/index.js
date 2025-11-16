@@ -31,6 +31,39 @@ const markdownComponents = {
   hr: ({ node, ...props }) => <hr className="my-6 border-t-2 border-gray-300" {...props} />,
 };
 
+// Function to parse set details from narrative (Warm-Up Set, Working Set 1, etc.)
+const parseSetDetails = (lines) => {
+  const setDetails = [];
+  for (let line of lines) {
+    const trimmed = line.trim();
+
+    // Match "Warm-Up Set - 10 reps @20X1 - Easy"
+    const warmupMatch = trimmed.match(/^Warm-Up Set\s*-\s*(\d+[\+]*)\s+reps?\s+@([\dXx]+)\s*-?\s*(.*)$/i);
+    if (warmupMatch) {
+      setDetails.push({
+        type: 'Warm-up',
+        reps: warmupMatch[1],
+        tempo: warmupMatch[2],
+        rpe: warmupMatch[3].trim() || ''
+      });
+      continue;
+    }
+
+    // Match "Working Set 1 - 12 reps @33X1 - RPE 7"
+    const workingMatch = trimmed.match(/^Working Set\s+(\d+)\s*-\s*(\d+[\+]*|Max)\s+reps?\s+@([\dXx]+)\s*(?:-\s*)?(?:RPE\s+)?(.*)$/i);
+    if (workingMatch) {
+      setDetails.push({
+        type: `Set ${workingMatch[1]}`,
+        reps: workingMatch[2],
+        tempo: workingMatch[3],
+        rpe: workingMatch[4].replace(/^\(aim for.*?\)/, '').trim()
+      });
+      continue;
+    }
+  }
+  return setDetails;
+};
+
 // Function to parse structured exercise data from workout text
 const parseExerciseData = (lines) => {
   const exercises = [];
@@ -153,14 +186,17 @@ const formatWorkoutAsMarkdown = (rawText) => {
 const parseNumberedExercises = (lines) => {
   const exercises = [];
   for (let line of lines) {
-    const match = line.match(/^(\d+)\)\s+(.*?)(?:;\s*)?(\d+[\-\d]*)?(?:\s+reps?(?:\/side)?)?(?:\s+@([\dXx]+))?/i);
+    // Match patterns like "1) BW Walking Lunge; 6-8 reps/side @20X0"
+    const match = line.match(/^(\d+)\)\s+([^;@]+?)(?:;\s*)?(\d+[\-\d]*)?(?:\s+reps?(?:\/side)?)?(?:\s*@\s*([\dXx]+))?/i);
     if (match) {
       exercises.push({
         name: match[2].trim(),
-        reps: match[3] || '',
-        tempo: match[4] || '',
-        sets: '',
-        rest: ''
+        sets: [{
+          type: '',
+          reps: match[3] || '',
+          tempo: match[4] || '',
+          rpe: ''
+        }]
       });
     }
   }
@@ -172,6 +208,7 @@ const formatSection = (sectionLetter, header, content) => {
 
   // Parse structured data
   const exercises = parseExerciseData(content);
+  const setDetails = parseSetDetails(content);
   const restPeriods = extractRestPeriods(content);
   const progressionNote = extractProgressionNotes(content);
 
@@ -179,38 +216,59 @@ const formatSection = (sectionLetter, header, content) => {
   const narrativeLines = [];
   let foundStructuredData = false;
   for (let line of content) {
-    if (line.match(/^Exercise(?:\s+\d+)?\s*:/)) {
+    if (line.match(/^(Exercise(?:\s+\d+)?|Warm-Up Set|Working Set)\s*:/)) {
       foundStructuredData = true;
       break;
     }
-    if (!foundStructuredData && line.trim() && !line.match(/^(Progression Note:|Reps:|Tempo:|Sets:)/)) {
+    if (!foundStructuredData && line.trim() && !line.match(/^(Progression Note:|Reps:|Tempo:|Sets:|Warm-Up Set|Working Set)/)) {
       narrativeLines.push(line);
     }
   }
 
-  // Add progression note if exists
-  if (progressionNote) {
-    result += `**Progression:** ${progressionNote}\n\n`;
+  // For Section A, format specially (Training Focus)
+  if (sectionLetter === 'A') {
+    // Extract training focus line
+    const focusMatch = content.join('\n').match(/Training Focus:\s*(.+)/);
+    if (focusMatch) {
+      result += `**Training Focus:** ${focusMatch[1]}\n\n`;
+    } else {
+      result += content.filter(line => !line.match(/^(Exercise|Reps|Tempo|Sets):/)).join('\n') + '\n';
+    }
+    return result;
   }
 
-  // Add narrative context if exists (but not for sections with structured data)
-  if (narrativeLines.length > 0 && exercises.length > 0 && sectionLetter !== 'A' && sectionLetter !== 'B' && sectionLetter !== 'G') {
-    result += narrativeLines.join('\n') + '\n\n';
+  // Add progression note if exists
+  if (progressionNote) {
+    result += `${progressionNote}\n\n`;
+  }
+
+  // Add timing info if present (like "Every 2:30 x 4 Working Sets")
+  const timingLines = narrativeLines.filter(line => line.match(/^Every\s+/i));
+  if (timingLines.length > 0 && exercises.length > 0) {
+    result += timingLines.join('\n') + '\n\n';
   }
 
   // Create tables based on section type
-  if (exercises.length > 0) {
+  if (exercises.length > 0 && setDetails.length > 0) {
+    // Strength sections with detailed set information
     if (exercises.length === 1) {
-      // Single exercise - one table
-      result += createExerciseTable([exercises[0]], restPeriods);
+      result += createDetailedExerciseTable(exercises[0], setDetails);
     } else {
       // Multiple exercises - separate tables
       exercises.forEach((exercise, index) => {
         if (index > 0) result += '\n';
         const exerciseRest = restPeriods[index] || '';
-        result += createExerciseTable([exercise], [exerciseRest]);
+        // For multi-exercise sections, use simple format
+        result += createSimpleExerciseTable([exercise], [exerciseRest]);
       });
     }
+  } else if (exercises.length > 0) {
+    // Exercises without detailed set info
+    exercises.forEach((exercise, index) => {
+      if (index > 0) result += '\n';
+      const exerciseRest = restPeriods[index] || '';
+      result += createSimpleExerciseTable([exercise], [exerciseRest]);
+    });
   } else {
     // Try parsing numbered exercises (for warmup/cooldown)
     const numberedExercises = parseNumberedExercises(narrativeLines);
@@ -220,7 +278,7 @@ const formatSection = (sectionLetter, header, content) => {
       if (otherLines.length > 0) {
         result += otherLines.join('\n') + '\n\n';
       }
-      result += createExerciseTable(numberedExercises, []);
+      result += createWarmupCooldownTable(numberedExercises);
     } else {
       // No structured exercise data - show narrative content
       result += content.filter(line => !line.match(/^(Exercise|Reps|Tempo|Sets):/)).join('\n') + '\n';
@@ -230,8 +288,42 @@ const formatSection = (sectionLetter, header, content) => {
   return result;
 };
 
-// Function to create a table for exercises
-const createExerciseTable = (exercises, restPeriods) => {
+// Function to create detailed table with individual set columns (for strength sections)
+const createDetailedExerciseTable = (exercise, setDetails) => {
+  if (!exercise || setDetails.length === 0) return '';
+
+  // Build header
+  let header = '| Exercise |';
+  let separator = '|----------|';
+
+  setDetails.forEach(set => {
+    header += ` ${set.type} |`;
+    separator += '------|';
+  });
+
+  header += ' Tempo | RPE |\n';
+  separator += '-------|-----|\n';
+
+  // Build row
+  let row = `| ${exercise.name} |`;
+
+  setDetails.forEach(set => {
+    row += ` ${set.reps} reps |`;
+  });
+
+  // Tempo (use first set's tempo, they should all be the same)
+  const tempo = setDetails[0]?.tempo || '';
+  row += ` ${tempo} |`;
+
+  // RPE (combine all RPE values)
+  const rpeValues = setDetails.map(set => set.rpe || '-').join(', ');
+  row += ` ${rpeValues} |\n`;
+
+  return header + separator + row + '\n';
+};
+
+// Function to create simple table for multi-exercise sections
+const createSimpleExerciseTable = (exercises, restPeriods) => {
   if (exercises.length === 0) return '';
 
   let markdown = '| Exercise | Sets | Reps | Tempo | Rest |\n';
@@ -245,6 +337,24 @@ const createExerciseTable = (exercises, restPeriods) => {
     const rest = restPeriods[index] || '';
 
     markdown += `| ${name} | ${sets} | ${reps} | ${tempo} | ${rest} |\n`;
+  });
+
+  return markdown + '\n';
+};
+
+// Function to create table for warmup/cooldown exercises
+const createWarmupCooldownTable = (exercises) => {
+  if (exercises.length === 0) return '';
+
+  let markdown = '| Exercise | Reps | Tempo |\n';
+  markdown += '|----------|------|-------|\n';
+
+  exercises.forEach(exercise => {
+    const name = exercise.name || '';
+    const reps = exercise.sets[0]?.reps || '';
+    const tempo = exercise.sets[0]?.tempo || '';
+
+    markdown += `| ${name} | ${reps} | ${tempo} |\n`;
   });
 
   return markdown + '\n';
