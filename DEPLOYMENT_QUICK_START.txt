@@ -1,0 +1,48 @@
+QUICK DEPLOYMENT GUIDE - FBB Workout App
+==========================================
+
+STEP 1: Download the Files
+- Download all the files I created (app.jsx, package.json, pages/, styles/, config files, etc.)
+- Create a folder called "fbb-workout-app"
+- Put all files inside this folder
+
+STEP 2: Get Node.js
+- Download and install Node.js from https://nodejs.org/ (choose LTS version)
+- This takes 5 minutes
+
+STEP 3: Push to GitHub
+- Create a GitHub account: https://github.com/signup (free)
+- Go to https://github.com/new
+- Create a new repository called "fbb-workout-app"
+- Open terminal/command prompt in your project folder and run:
+
+  git init
+  git add .
+  git commit -m "Initial commit"
+  git branch -M main
+  git remote add origin https://github.com/YOUR-USERNAME/fbb-workout-app.git
+  git push -u origin main
+
+  (Replace YOUR-USERNAME with your GitHub username)
+
+STEP 4: Deploy to Vercel
+- Go to https://vercel.com/signup
+- Click "Sign up with GitHub"
+- Authorize with GitHub
+- Click "Import Project"
+- Select your fbb-workout-app repository
+- Click "Import"
+- Wait 2-3 minutes
+- Your app is live! You'll get a URL like: https://fbb-workout-app.vercel.app
+
+STEP 5: Make Updates
+- Edit files on your computer
+- Open terminal in the project folder and run:
+
+  git add .
+  git commit -m "Your update message"
+  git push
+
+- Vercel automatically redeploys within 30 seconds
+
+That's it! You're done.
