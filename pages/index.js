@@ -31,23 +31,47 @@ const markdownComponents = {
   hr: ({ node, ...props }) => <hr className="my-6 border-t-2 border-gray-300" {...props} />,
 };
 
-// Simple function to clean up workout text for display
-const cleanWorkoutText = (text) => {
-  // Remove lines that start with "Exercise:", "Reps:", "Tempo:", "Sets:"
-  const lines = text.split('\n');
-  const cleanedLines = lines.filter(line => {
-    const trimmed = line.trim();
-    return !trimmed.match(/^(Exercise(?:\s+\d+)?|Reps|Tempo|Sets)\s*:/);
-  });
-  return cleanedLines.join('\n');
-};
-
 // Function to format raw workout text as clean text (no tables)
 const formatWorkoutAsMarkdown = (rawText) => {
   if (!rawText) return '';
 
-  // Simply clean the text and return it
-  return cleanWorkoutText(rawText);
+  const lines = rawText.split('\n');
+  let result = [];
+  let currentSection = '';
+  let inSectionC = false;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmed = line.trim();
+
+    // Skip metadata lines
+    if (trimmed.match(/^(Exercise(?:\s+\d+)?|Reps|Tempo|Sets)\s*:/)) {
+      continue;
+    }
+
+    // Detect section headers
+    const sectionMatch = trimmed.match(/^([A-G])\)\s+(.*)/);
+    if (sectionMatch) {
+      currentSection = sectionMatch[1];
+      inSectionC = (currentSection === 'C');
+      result.push(line);
+      continue;
+    }
+
+    // Format section C with bullet points
+    if (inSectionC && trimmed) {
+      // Check if it's a set line (Warm-Up Set or Working Set)
+      if (trimmed.match(/^(Warm-Up|Working)\s+Set/i)) {
+        result.push('- ' + trimmed);
+      } else {
+        result.push(line);
+      }
+    } else {
+      result.push(line);
+    }
+  }
+
+  return result.join('\n');
 };
 
 export default function Home() {
