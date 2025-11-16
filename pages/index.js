@@ -26,7 +26,7 @@ const markdownComponents = {
   hr: ({ node, ...props }) => <hr className="my-6 border-t-2 border-gray-300" {...props} />,
 };
 
-// Function to format raw workout text into beautiful markdown
+// Function to format raw workout text into beautiful markdown with tables
 const formatWorkoutAsMarkdown = (rawText) => {
   if (!rawText) return '';
   
@@ -34,6 +34,7 @@ const formatWorkoutAsMarkdown = (rawText) => {
   const lines = rawText.split('\n');
   
   let currentSection = '';
+  let sectionLetter = '';
   let sectionContent = [];
   
   for (let i = 0; i < lines.length; i++) {
@@ -41,12 +42,14 @@ const formatWorkoutAsMarkdown = (rawText) => {
     const trimmed = line.trim();
     
     // Detect section headers (A), B), C), etc.)
-    if (trimmed.match(/^[A-G]\)\s+/)) {
+    const sectionMatch = trimmed.match(/^([A-G])\)\s+(.*)/);
+    if (sectionMatch) {
       // Save previous section if exists
       if (currentSection) {
-        markdown += formatSection(currentSection, sectionContent);
+        markdown += formatSection(sectionLetter, currentSection, sectionContent);
         sectionContent = [];
       }
+      sectionLetter = sectionMatch[1];
       currentSection = trimmed;
     } else if (trimmed === '-----' || trimmed === '') {
       // Empty line - add to content
@@ -60,58 +63,176 @@ const formatWorkoutAsMarkdown = (rawText) => {
   
   // Save last section
   if (currentSection) {
-    markdown += formatSection(currentSection, sectionContent);
+    markdown += formatSection(sectionLetter, currentSection, sectionContent);
   }
   
   return markdown;
 };
 
-const formatSection = (header, content) => {
+const formatSection = (sectionLetter, header, content) => {
   let result = `\n## ${header}\n\n`;
   
-  let inList = false;
-  let currentList = [];
-  
-  for (let line of content) {
-    if (!line.trim()) {
-      if (currentList.length > 0) {
-        result += currentList.join('\n') + '\n\n';
-        currentList = [];
-        inList = false;
-      }
-      continue;
-    }
-    
-    // Detect numbered lists
-    if (line.match(/^\d+\.\s+/)) {
-      if (!inList) {
-        inList = true;
-      }
-      currentList.push(`${line}`);
-    }
-    // Detect bullet/rest items
-    else if (line.match(/^-\s+/) || line.includes('rest ')) {
-      if (!inList) {
-        inList = true;
-      }
-      currentList.push(`- ${line.replace(/^-\s+/, '')}`);
-    }
-    // Regular content
-    else {
-      if (currentList.length > 0) {
-        result += currentList.join('\n') + '\n\n';
-        currentList = [];
-        inList = false;
-      }
-      result += `${line}\n`;
-    }
-  }
-  
-  if (currentList.length > 0) {
-    result += currentList.join('\n') + '\n\n';
+  // Determine section type and format accordingly
+  if (sectionLetter === 'C' || sectionLetter === 'D') {
+    // Strength Intensity sections - create detailed tables
+    result += formatStrengthTable(content);
+  } else if (sectionLetter === 'E') {
+    // Strength Balance - create exercise table
+    result += formatBalanceTable(content);
+  } else if (sectionLetter === 'F') {
+    // Finisher - create finisher table
+    result += formatFinisherTable(content);
+  } else if (sectionLetter === 'B') {
+    // Warmup - format as list
+    result += formatWarmup(content);
+  } else {
+    // Other sections - format as text
+    result += formatBasicContent(content);
   }
   
   return result;
+};
+
+const formatStrengthTable = (content) => {
+  let markdown = '| Set | Reps | Tempo | RPE/Notes |\n|-----|------|-------|----------|\n';
+  
+  for (let line of content) {
+    if (!line.trim()) continue;
+    
+    // Look for set information
+    if (line.includes('@') || line.includes('reps') || line.includes('Set')) {
+      const setMatch = line.match(/(Warm-Up|Working)\s+Set\s*-?\s*(\d+[\-\+]*)?.*?(\d+)\s+reps?\s+@\s+([\dXx]+).*?(RPE\s+[\d\.]*)?(.*)?/i);
+      
+      if (setMatch) {
+        const setName = setMatch[1] || 'Set';
+        const reps = setMatch[3] || '10';
+        const tempo = setMatch[4] || '20X1';
+        const rpe = setMatch[5] || setMatch[6] || 'Easy';
+        
+        markdown += `| ${setName} | ${reps} | ${tempo} | ${rpe} |\n`;
+      } else if (line.match(/\d+\s+@\s+[\dXx]+/) || line.match(/reps/i)) {
+        // Try simpler parsing
+        const parts = line.split(/\s+@\s+/);
+        if (parts.length >= 1) {
+          const repMatch = line.match(/(\d+)\s+(?:reps?)?/i);
+          const tempoMatch = line.match(/@\s+([\dXx]+)/i);
+          const rpeMatch = line.match(/(RPE\s+[\d\.]+|Easy|Max)/i);
+          
+          const reps = repMatch ? repMatch[1] : '10';
+          const tempo = tempoMatch ? tempoMatch[1] : '20X1';
+          const rpe = rpeMatch ? rpeMatch[1] : '';
+          
+          markdown += `| Set | ${reps} | ${tempo} | ${rpe} |\n`;
+        }
+      }
+    }
+  }
+  
+  return markdown + '\n';
+};
+
+const formatBalanceTable = (content) => {
+  let markdown = '| Exercise | Reps | Rest |\n|----------|------|------|\n';
+  let exercises = [];
+  
+  for (let line of content) {
+    if (!line.trim()) continue;
+    
+    // Look for numbered exercises (1. Exercise name; reps)
+    const exerciseMatch = line.match(/^\d+\.\s+(.*?);?\s*(\d+[\-\d]*)\s+reps?/i);
+    if (exerciseMatch) {
+      exercises.push({
+        name: exerciseMatch[1].trim(),
+        reps: exerciseMatch[2]
+      });
+    } else if (line.match(/^\d+\.\s+/)) {
+      const name = line.replace(/^\d+\.\s+/, '').trim();
+      exercises.push({ name });
+    } else if (line.includes('rest')) {
+      if (exercises.length > 0) {
+        const restMatch = line.match(/rest\s+([\d\-\s]+)/i);
+        if (restMatch) {
+          exercises[exercises.length - 1].rest = restMatch[1].trim();
+        }
+      }
+    }
+  }
+  
+  exercises.forEach(ex => {
+    markdown += `| ${ex.name} | ${ex.reps || '6-8'} | ${ex.rest || '30-90 sec'} |\n`;
+  });
+  
+  return markdown + '\n';
+};
+
+const formatFinisherTable = (content) => {
+  let markdown = '| Exercise | Reps | Tempo | Rest |\n|----------|------|-------|------|\n';
+  let exercises = [];
+  
+  for (let line of content) {
+    if (!line.trim()) continue;
+    
+    // Look for numbered exercises with full details
+    const match = line.match(/^\d+\.\s+(.*?);?\s*(\d+[\-\d]*)\s+reps?\s+@([\dXx]+)?(.*)?/i);
+    if (match) {
+      exercises.push({
+        name: match[1].trim(),
+        reps: match[2],
+        tempo: match[3] || '20X0',
+        rest: ''
+      });
+    } else if (line.match(/^\d+\.\s+/)) {
+      const name = line.replace(/^\d+\.\s+/, '').split(/;|@/)[0].trim();
+      exercises.push({ name, reps: '', tempo: '', rest: '' });
+    } else if (line.includes('rest')) {
+      if (exercises.length > 0) {
+        const restMatch = line.match(/rest\s+([\d\-\s]+)/i);
+        if (restMatch) {
+          exercises[exercises.length - 1].rest = restMatch[1].trim();
+        }
+      }
+    }
+  }
+  
+  exercises.forEach(ex => {
+    markdown += `| ${ex.name} | ${ex.reps || ''} | ${ex.tempo || ''} | ${ex.rest || ''} |\n`;
+  });
+  
+  return markdown + '\n';
+};
+
+const formatWarmup = (content) => {
+  let markdown = '';
+  
+  for (let line of content) {
+    if (!line.trim()) {
+      markdown += '\n';
+      continue;
+    }
+    
+    // Format as list
+    if (line.match(/^\d+\.\s+/)) {
+      markdown += `${line}\n`;
+    } else {
+      markdown += `${line}\n`;
+    }
+  }
+  
+  return markdown + '\n';
+};
+
+const formatBasicContent = (content) => {
+  let markdown = '';
+  
+  for (let line of content) {
+    if (!line.trim()) {
+      markdown += '\n';
+    } else {
+      markdown += `${line}\n`;
+    }
+  }
+  
+  return markdown + '\n';
 };
 
 export default function Home() {
