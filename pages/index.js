@@ -16,19 +16,102 @@ const markdownComponents = {
       <table className="w-full border-collapse border border-gray-300" {...props} />
     </div>
   ),
-  thead: ({ node, ...props }) => <thead className="bg-indigo-50" {...props} />,
-  th: ({ node, ...props }) => <th className="border border-gray-300 px-4 py-2 text-left font-bold text-gray-800" {...props} />,
+  thead: ({ node, ...props }) => <thead className="bg-indigo-100" {...props} />,
+  th: ({ node, ...props }) => <th className="border border-gray-300 px-4 py-2 text-left font-bold text-gray-800 bg-indigo-50" {...props} />,
   td: ({ node, ...props }) => <td className="border border-gray-300 px-4 py-2 text-gray-700" {...props} />,
   tr: ({ node, ...props }) => <tr className="hover:bg-gray-50" {...props} />,
-  ul: ({ node, ...props }) => <ul className="list-disc list-inside mb-3 space-y-1" {...props} />,
-  ol: ({ node, ...props }) => <ol className="list-decimal list-inside mb-3 space-y-1" {...props} />,
+  ul: ({ node, ...props }) => <ul className="list-disc list-inside mb-3 space-y-1 ml-4" {...props} />,
+  ol: ({ node, ...props }) => <ol className="list-decimal list-inside mb-3 space-y-1 ml-4" {...props} />,
   li: ({ node, ...props }) => <li className="text-gray-700" {...props} />,
-  hr: ({ node, ...props }) => <hr className="my-4 border-t-2 border-gray-300" {...props} />,
-  code: ({ node, inline, ...props }) => 
-    inline ? 
-      <code className="bg-gray-100 px-2 py-1 rounded font-mono text-sm text-red-600" {...props} /> :
-      <code className="bg-gray-100 p-4 rounded-lg block overflow-x-auto font-mono text-sm mb-4" {...props} />,
-  blockquote: ({ node, ...props }) => <blockquote className="border-l-4 border-indigo-400 pl-4 italic text-gray-600 my-4" {...props} />,
+  hr: ({ node, ...props }) => <hr className="my-6 border-t-2 border-gray-300" {...props} />,
+};
+
+// Function to format raw workout text into beautiful markdown
+const formatWorkoutAsMarkdown = (rawText) => {
+  if (!rawText) return '';
+  
+  let markdown = '';
+  const lines = rawText.split('\n');
+  
+  let currentSection = '';
+  let sectionContent = [];
+  
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmed = line.trim();
+    
+    // Detect section headers (A), B), C), etc.)
+    if (trimmed.match(/^[A-G]\)\s+/)) {
+      // Save previous section if exists
+      if (currentSection) {
+        markdown += formatSection(currentSection, sectionContent);
+        sectionContent = [];
+      }
+      currentSection = trimmed;
+    } else if (trimmed === '-----' || trimmed === '') {
+      // Empty line - add to content
+      if (currentSection) {
+        sectionContent.push('');
+      }
+    } else if (currentSection) {
+      sectionContent.push(trimmed);
+    }
+  }
+  
+  // Save last section
+  if (currentSection) {
+    markdown += formatSection(currentSection, sectionContent);
+  }
+  
+  return markdown;
+};
+
+const formatSection = (header, content) => {
+  let result = `\n## ${header}\n\n`;
+  
+  let inList = false;
+  let currentList = [];
+  
+  for (let line of content) {
+    if (!line.trim()) {
+      if (currentList.length > 0) {
+        result += currentList.join('\n') + '\n\n';
+        currentList = [];
+        inList = false;
+      }
+      continue;
+    }
+    
+    // Detect numbered lists
+    if (line.match(/^\d+\.\s+/)) {
+      if (!inList) {
+        inList = true;
+      }
+      currentList.push(`${line}`);
+    }
+    // Detect bullet/rest items
+    else if (line.match(/^-\s+/) || line.includes('rest ')) {
+      if (!inList) {
+        inList = true;
+      }
+      currentList.push(`- ${line.replace(/^-\s+/, '')}`);
+    }
+    // Regular content
+    else {
+      if (currentList.length > 0) {
+        result += currentList.join('\n') + '\n\n';
+        currentList = [];
+        inList = false;
+      }
+      result += `${line}\n`;
+    }
+  }
+  
+  if (currentList.length > 0) {
+    result += currentList.join('\n') + '\n\n';
+  }
+  
+  return result;
 };
 
 export default function Home() {
@@ -78,7 +161,7 @@ export default function Home() {
   const downloadWorkout = () => {
     if (!workout) return;
     
-    const text = `# ${workout.date}\n## Week ${workout.week}, Day ${workout.day}\n\n${workout.content}`;
+    const text = `# ${workout.date}\n## Week ${workout.week}, Day ${workout.day}\n${formatWorkoutAsMarkdown(workout.content)}`;
     const element = document.createElement('a');
     element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(text));
     element.setAttribute('download', `workout-${workout.date.replace(/\s+/g, '-')}.txt`);
@@ -154,7 +237,7 @@ export default function Home() {
             
             <div className="prose prose-sm max-w-none">
               <ReactMarkdown components={markdownComponents}>
-                {workout.content}
+                {formatWorkoutAsMarkdown(workout.content)}
               </ReactMarkdown>
             </div>
           </div>
