@@ -258,18 +258,29 @@ export default function Home() {
 
   const generateWorkout = () => {
     setLoading(true);
-    
+
     setTimeout(() => {
       const { week, day } = calculateCyclePosition(today);
-      const workoutContent = workoutData[week]?.[day];
-      
+
+      // Define workout schedule: Mon, Tue, Thu, Fri are strength days
+      // Wed (3), Sat (6) are recovery days, Sun (7) is rest day
+      let workoutType = 'strength';
+      let workoutContent = workoutData[week]?.[day];
+
+      if (day === 3 || day === 6) {
+        workoutType = 'recovery';
+      } else if (day === 7) {
+        workoutType = 'rest';
+      }
+
       setWorkout({
         week,
         day,
+        type: workoutType,
         content: workoutContent || `Week ${week}, Day ${day} - Workout not found`,
         date: today.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
       });
-      
+
       setLoading(false);
     }, 300);
   };
@@ -348,24 +359,86 @@ export default function Home() {
               <div>
                 <h2 className="text-3xl font-bold text-gray-900">{workout.date}</h2>
                 <p className="text-indigo-600 font-semibold">Week {workout.week} - Day {workout.day}</p>
+                {workout.type === 'recovery' && (
+                  <p className="text-green-600 font-semibold mt-1">Recovery Day</p>
+                )}
+                {workout.type === 'rest' && (
+                  <p className="text-blue-600 font-semibold mt-1">Rest Day</p>
+                )}
               </div>
-              <button
-                onClick={downloadWorkout}
-                className="bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-5 rounded-lg flex items-center gap-2 shadow-md transition whitespace-nowrap"
-              >
-                <Download size={20} />
-                Download
-              </button>
+              {workout.type === 'strength' && (
+                <button
+                  onClick={downloadWorkout}
+                  className="bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-5 rounded-lg flex items-center gap-2 shadow-md transition whitespace-nowrap"
+                >
+                  <Download size={20} />
+                  Download
+                </button>
+              )}
             </div>
-            
-            <div className="prose prose-sm max-w-none">
-              <ReactMarkdown
-                components={markdownComponents}
-                remarkPlugins={[remarkGfm]}
-              >
-                {formatWorkoutAsMarkdown(workout.content)}
-              </ReactMarkdown>
-            </div>
+
+            {workout.type === 'rest' && (
+              <div className="text-center py-12">
+                <div className="text-6xl mb-4">🌟</div>
+                <h3 className="text-2xl font-bold text-gray-800 mb-4">Rest Day</h3>
+                <p className="text-gray-600 text-lg mb-6 max-w-2xl mx-auto">
+                  Today is a day for complete rest and recovery. Allow your body to repair and grow stronger.
+                </p>
+                <div className="bg-blue-50 rounded-lg p-6 max-w-2xl mx-auto">
+                  <p className="text-gray-700 italic">
+                    "It's easy to get caught up in numbers, but how you move matters more than how much you move.
+                    Focus on quality first, and quantity will follow."
+                  </p>
+                  <p className="text-gray-600 mt-4">— Marcus</p>
+                </div>
+              </div>
+            )}
+
+            {workout.type === 'recovery' && (
+              <div className="text-center py-12">
+                <div className="text-6xl mb-4">🧘</div>
+                <h3 className="text-2xl font-bold text-gray-800 mb-4">Recovery Day</h3>
+                <p className="text-gray-600 text-lg mb-6 max-w-2xl mx-auto">
+                  Focus on active recovery today. Your body needs time to repair and adapt.
+                </p>
+                <div className="bg-green-50 rounded-lg p-6 max-w-2xl mx-auto text-left">
+                  <h4 className="font-bold text-gray-800 mb-3">Recovery Activities:</h4>
+                  <ul className="space-y-2 text-gray-700">
+                    <li className="flex items-start">
+                      <span className="text-green-600 mr-2">✓</span>
+                      <span>Light stretching or yoga (20-30 minutes)</span>
+                    </li>
+                    <li className="flex items-start">
+                      <span className="text-green-600 mr-2">✓</span>
+                      <span>Easy walk or bike ride (30-45 minutes at conversational pace)</span>
+                    </li>
+                    <li className="flex items-start">
+                      <span className="text-green-600 mr-2">✓</span>
+                      <span>Foam rolling and mobility work</span>
+                    </li>
+                    <li className="flex items-start">
+                      <span className="text-green-600 mr-2">✓</span>
+                      <span>Swimming or water activities (low intensity)</span>
+                    </li>
+                    <li className="flex items-start">
+                      <span className="text-green-600 mr-2">✓</span>
+                      <span>Focus on hydration and nutrition</span>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            )}
+
+            {workout.type === 'strength' && (
+              <div className="prose prose-sm max-w-none">
+                <ReactMarkdown
+                  components={markdownComponents}
+                  remarkPlugins={[remarkGfm]}
+                >
+                  {formatWorkoutAsMarkdown(workout.content)}
+                </ReactMarkdown>
+              </div>
+            )}
           </div>
         )}
       </div>
