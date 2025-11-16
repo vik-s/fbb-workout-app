@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { Download, Loader } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+
+// IMPORTANT: All workouts are strictly loaded from workouts.json
+// This is the single source of truth for all workout data
 import workoutData from '../workouts.json';
 
 // Custom markdown components for beautiful styling
@@ -258,18 +261,33 @@ export default function Home() {
 
   const generateWorkout = () => {
     setLoading(true);
-    
+
     setTimeout(() => {
       const { week, day } = calculateCyclePosition(today);
+
+      // STRICT: Only retrieve workouts from workouts.json
+      // No dynamic generation or hardcoded workouts - JSON is the single source of truth
       const workoutContent = workoutData[week]?.[day];
-      
-      setWorkout({
-        week,
-        day,
-        content: workoutContent || `Week ${week}, Day ${day} - Workout not found`,
-        date: today.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
-      });
-      
+
+      // Validate that the workout exists in workouts.json
+      if (!workoutContent) {
+        setWorkout({
+          week,
+          day,
+          content: null,
+          date: today.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }),
+          notFound: true
+        });
+      } else {
+        setWorkout({
+          week,
+          day,
+          content: workoutContent,
+          date: today.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }),
+          notFound: false
+        });
+      }
+
       setLoading(false);
     }, 300);
   };
@@ -349,22 +367,41 @@ export default function Home() {
                 <h2 className="text-3xl font-bold text-gray-900">{workout.date}</h2>
                 <p className="text-indigo-600 font-semibold">Week {workout.week} - Day {workout.day}</p>
               </div>
-              <button
-                onClick={downloadWorkout}
-                className="bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-5 rounded-lg flex items-center gap-2 shadow-md transition whitespace-nowrap"
-              >
-                <Download size={20} />
-                Download
-              </button>
+              {!workout.notFound && (
+                <button
+                  onClick={downloadWorkout}
+                  className="bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-5 rounded-lg flex items-center gap-2 shadow-md transition whitespace-nowrap"
+                >
+                  <Download size={20} />
+                  Download
+                </button>
+              )}
             </div>
-            
+
             <div className="prose prose-sm max-w-none">
-              <ReactMarkdown
-                components={markdownComponents}
-                remarkPlugins={[remarkGfm]}
-              >
-                {formatWorkoutAsMarkdown(workout.content)}
-              </ReactMarkdown>
+              {workout.notFound ? (
+                <div className="bg-yellow-50 border-l-4 border-yellow-400 p-6 rounded">
+                  <div className="flex items-center mb-2">
+                    <svg className="h-6 w-6 text-yellow-400 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd"/>
+                    </svg>
+                    <h3 className="text-lg font-semibold text-yellow-800">Workout Not Available</h3>
+                  </div>
+                  <p className="text-yellow-700">
+                    No workout found in workouts.json for Week {workout.week}, Day {workout.day}.
+                  </p>
+                  <p className="text-yellow-600 text-sm mt-2">
+                    Note: All workouts are strictly loaded from workouts.json. Please ensure the workout data exists for this date.
+                  </p>
+                </div>
+              ) : (
+                <ReactMarkdown
+                  components={markdownComponents}
+                  remarkPlugins={[remarkGfm]}
+                >
+                  {formatWorkoutAsMarkdown(workout.content)}
+                </ReactMarkdown>
+              )}
             </div>
           </div>
         )}
